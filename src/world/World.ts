@@ -1,19 +1,44 @@
 import { Chunk } from './Chunk';
 import {
-  EMPTY_CELL,
   getCellMaterial,
   getCellVelocityX,
   getCellVelocityY,
+  packCell,
   type PackedCell,
   withCellMaterial,
   withCellVelocity,
 } from './Cell';
-import { CHUNK_SIZE } from './constants';
+import { CHUNK_SIZE, type ChunkRange } from './constants';
 import { MaterialId } from './Material';
+
+const BOUNDARY_CELL = packCell(MaterialId.Stone);
 
 export class World {
   private readonly chunks = new Set<Chunk>();
   private readonly chunkRows = new Map<number, Map<number, Chunk>>();
+
+  public constructor(chunkRange: ChunkRange) {
+    this.validateChunkRange(chunkRange);
+
+    for (
+      let chunkY = chunkRange.minimumY;
+      chunkY <= chunkRange.maximumY;
+      chunkY += 1
+    ) {
+      const row = new Map<number, Chunk>();
+      this.chunkRows.set(chunkY, row);
+
+      for (
+        let chunkX = chunkRange.minimumX;
+        chunkX <= chunkRange.maximumX;
+        chunkX += 1
+      ) {
+        const chunk = new Chunk(chunkX, chunkY);
+        row.set(chunkX, chunk);
+        this.chunks.add(chunk);
+      }
+    }
+  }
 
   public get loadedChunks(): ReadonlySet<Chunk> {
     return this.chunks;
@@ -24,7 +49,7 @@ export class World {
     const chunkY = Math.floor(worldY / CHUNK_SIZE);
     const chunk = this.getChunk(chunkX, chunkY);
 
-    if (!chunk) return EMPTY_CELL;
+    if (!chunk) return BOUNDARY_CELL;
 
     return chunk.getCell(
       worldX - chunkX * CHUNK_SIZE,
@@ -35,7 +60,8 @@ export class World {
   public setCell(worldX: number, worldY: number, cell: PackedCell): void {
     const chunkX = Math.floor(worldX / CHUNK_SIZE);
     const chunkY = Math.floor(worldY / CHUNK_SIZE);
-    const chunk = this.getOrCreateChunk(chunkX, chunkY);
+    const chunk = this.getChunk(chunkX, chunkY);
+    if (!chunk) return;
     const localX = worldX - chunkX * CHUNK_SIZE;
     const localY = worldY - chunkY * CHUNK_SIZE;
 
@@ -83,24 +109,6 @@ export class World {
     return this.chunkRows.get(chunkY)?.get(chunkX);
   }
 
-  public getOrCreateChunk(chunkX: number, chunkY: number): Chunk {
-    let row = this.chunkRows.get(chunkY);
-    if (!row) {
-      row = new Map<number, Chunk>();
-      this.chunkRows.set(chunkY, row);
-    }
-
-    let chunk = row.get(chunkX);
-
-    if (!chunk) {
-      chunk = new Chunk(chunkX, chunkY);
-      row.set(chunkX, chunk);
-      this.chunks.add(chunk);
-    }
-
-    return chunk;
-  }
-
   public getRelativeCell(
     origin: Chunk,
     localX: number,
@@ -131,7 +139,8 @@ export class World {
         : this.getChunk(origin.x + chunkOffsetX, origin.y + chunkOffsetY);
 
     return (
-      targetChunk?.getCellByIndex(targetY * CHUNK_SIZE + targetX) ?? EMPTY_CELL
+      targetChunk?.getCellByIndex(targetY * CHUNK_SIZE + targetX) ??
+      BOUNDARY_CELL
     );
   }
 
@@ -158,10 +167,12 @@ export class World {
       const chunkOffsetY = Math.floor(targetY / CHUNK_SIZE);
       targetX -= chunkOffsetX * CHUNK_SIZE;
       targetY -= chunkOffsetY * CHUNK_SIZE;
-      targetChunk = this.getOrCreateChunk(
+      const adjacentChunk = this.getChunk(
         origin.x + chunkOffsetX,
         origin.y + chunkOffsetY,
       );
+      if (!adjacentChunk) return;
+      targetChunk = adjacentChunk;
     }
     const sourceIndex = localY * CHUNK_SIZE + localX;
     const targetIndex = targetY * CHUNK_SIZE + targetX;
@@ -185,7 +196,54 @@ export class World {
     chunk.setCellByIndex(index, cell);
   }
 
+  public setRelativeCell(
+    origin: Chunk,
+    localX: number,
+    localY: number,
+    deltaX: number,
+    deltaY: number,
+    cell: PackedCell,
+  ): void {
+    let targetX = localX + deltaX;
+    let targetY = localY + deltaY;
+    let targetChunk = origin;
+
+    if (
+      targetX < 0 ||
+      targetX >= CHUNK_SIZE ||
+      targetY < 0 ||
+      targetY >= CHUNK_SIZE
+    ) {
+      const chunkOffsetX = Math.floor(targetX / CHUNK_SIZE);
+      const chunkOffsetY = Math.floor(targetY / CHUNK_SIZE);
+      targetX -= chunkOffsetX * CHUNK_SIZE;
+      targetY -= chunkOffsetY * CHUNK_SIZE;
+      const adjacentChunk = this.getChunk(
+        origin.x + chunkOffsetX,
+        origin.y + chunkOffsetY,
+      );
+      if (!adjacentChunk) return;
+      targetChunk = adjacentChunk;
+    }
+
+    const index = targetY * CHUNK_SIZE + targetX;
+    targetChunk.setCellByIndex(index, cell);
+  }
+
   public clearUpdateStamps(): void {
     for (const chunk of this.chunks) chunk.clearUpdateStamps();
+  }
+
+  private validateChunkRange(chunkRange: ChunkRange): void {
+    if (
+      !Number.isInteger(chunkRange.minimumX) ||
+      !Number.isInteger(chunkRange.minimumY) ||
+      !Number.isInteger(chunkRange.maximumX) ||
+      !Number.isInteger(chunkRange.maximumY) ||
+      chunkRange.minimumX > chunkRange.maximumX ||
+      chunkRange.minimumY > chunkRange.maximumY
+    ) {
+      throw new RangeError('Chunk range must contain valid inclusive integers.');
+    }
   }
 }

@@ -2,16 +2,24 @@ import { MaterialId } from './Material';
 
 export type PackedCell = number;
 
-// 31......................16 15.....12 11......8 7..........0
-// [        reserved        ][ vel Y ][ vel X ][ material ]
+// 31....28 27....24 23............16 15.............8 7..........0
+// [ frac Y ][ frac X ][ velocity Y ][ velocity X ][ material ]
 const BYTE_MASK = 0xff;
 const NIBBLE_MASK = 0x0f;
 const MATERIAL_MASK = BYTE_MASK;
 const VELOCITY_X_SHIFT = 8;
-const VELOCITY_Y_SHIFT = 12;
-const VELOCITY_X_MASK = NIBBLE_MASK << VELOCITY_X_SHIFT;
-const VELOCITY_Y_MASK = NIBBLE_MASK << VELOCITY_Y_SHIFT;
+const VELOCITY_Y_SHIFT = 16;
+const FRACTION_X_SHIFT = 24;
+const FRACTION_Y_SHIFT = 28;
+const VELOCITY_X_MASK = BYTE_MASK << VELOCITY_X_SHIFT;
+const VELOCITY_Y_MASK = BYTE_MASK << VELOCITY_Y_SHIFT;
 const VELOCITY_MASK = VELOCITY_X_MASK | VELOCITY_Y_MASK;
+const FRACTION_X_MASK = NIBBLE_MASK << FRACTION_X_SHIFT;
+const FRACTION_Y_MASK = NIBBLE_MASK << FRACTION_Y_SHIFT;
+const MOTION_MASK =
+  VELOCITY_MASK | FRACTION_X_MASK | FRACTION_Y_MASK;
+
+export const CELL_VELOCITY_SCALE = 16;
 
 export function packCell(
   material: MaterialId,
@@ -19,16 +27,16 @@ export function packCell(
   velocityY = 0,
 ): PackedCell {
   assertUnsignedByte(material, 'material');
-  assertSignedNibble(velocityX, 'velocityX');
-  assertSignedNibble(velocityY, 'velocityY');
+  assertVelocity(velocityX, 'velocityX');
+  assertVelocity(velocityY, 'velocityY');
 
   if (material === MaterialId.Empty) return 0;
 
-  return (
-    material |
-    ((velocityX & NIBBLE_MASK) << VELOCITY_X_SHIFT) |
-    ((velocityY & NIBBLE_MASK) << VELOCITY_Y_SHIFT)
-  ) >>> 0;
+  return withCellVelocityRawUnchecked(
+    material,
+    Math.round(velocityX * CELL_VELOCITY_SCALE),
+    Math.round(velocityY * CELL_VELOCITY_SCALE),
+  );
 }
 
 export function getCellMaterial(cell: PackedCell): MaterialId {
@@ -36,11 +44,27 @@ export function getCellMaterial(cell: PackedCell): MaterialId {
 }
 
 export function getCellVelocityX(cell: PackedCell): number {
-  return decodeSignedNibble(cell >>> VELOCITY_X_SHIFT);
+  return getCellVelocityXRaw(cell) / CELL_VELOCITY_SCALE;
 }
 
 export function getCellVelocityY(cell: PackedCell): number {
-  return decodeSignedNibble(cell >>> VELOCITY_Y_SHIFT);
+  return getCellVelocityYRaw(cell) / CELL_VELOCITY_SCALE;
+}
+
+export function getCellVelocityXRaw(cell: PackedCell): number {
+  return decodeSignedByte(cell >>> VELOCITY_X_SHIFT);
+}
+
+export function getCellVelocityYRaw(cell: PackedCell): number {
+  return decodeSignedByte(cell >>> VELOCITY_Y_SHIFT);
+}
+
+export function getCellFractionXRaw(cell: PackedCell): number {
+  return decodeSignedNibble(cell >>> FRACTION_X_SHIFT);
+}
+
+export function getCellFractionYRaw(cell: PackedCell): number {
+  return decodeSignedNibble(cell >>> FRACTION_Y_SHIFT);
 }
 
 export function withCellMaterial(
@@ -57,29 +81,42 @@ export function withCellVelocity(
   velocityX: number,
   velocityY: number,
 ): PackedCell {
-  assertSignedNibble(velocityX, 'velocityX');
-  assertSignedNibble(velocityY, 'velocityY');
+  assertVelocity(velocityX, 'velocityX');
+  assertVelocity(velocityY, 'velocityY');
 
-  return (
-    (cell & ~VELOCITY_MASK) |
-    ((velocityX & NIBBLE_MASK) << VELOCITY_X_SHIFT) |
-    ((velocityY & NIBBLE_MASK) << VELOCITY_Y_SHIFT)
-  ) >>> 0;
+  return withCellVelocityRawUnchecked(
+    cell,
+    Math.round(velocityX * CELL_VELOCITY_SCALE),
+    Math.round(velocityY * CELL_VELOCITY_SCALE),
+  );
 }
 
-/**
- * Hot-path variant for simulation code that already owns the velocity bounds.
- * Values outside the signed-nibble range are intentionally truncated.
- */
-export function withCellVelocityUnchecked(
+/** Values outside the signed-byte range are intentionally truncated. */
+export function withCellVelocityRawUnchecked(
   cell: PackedCell,
   velocityX: number,
   velocityY: number,
 ): PackedCell {
   return (
     (cell & ~VELOCITY_MASK) |
-    ((velocityX & NIBBLE_MASK) << VELOCITY_X_SHIFT) |
-    ((velocityY & NIBBLE_MASK) << VELOCITY_Y_SHIFT)
+    ((velocityX & BYTE_MASK) << VELOCITY_X_SHIFT) |
+    ((velocityY & BYTE_MASK) << VELOCITY_Y_SHIFT)
+  ) >>> 0;
+}
+
+export function withCellMotionUnchecked(
+  cell: PackedCell,
+  velocityX: number,
+  velocityY: number,
+  fractionX: number,
+  fractionY: number,
+): PackedCell {
+  return (
+    (cell & ~MOTION_MASK) |
+    ((velocityX & BYTE_MASK) << VELOCITY_X_SHIFT) |
+    ((velocityY & BYTE_MASK) << VELOCITY_Y_SHIFT) |
+    ((fractionX & NIBBLE_MASK) << FRACTION_X_SHIFT) |
+    ((fractionY & NIBBLE_MASK) << FRACTION_Y_SHIFT)
   ) >>> 0;
 }
 
@@ -90,14 +127,19 @@ function decodeSignedNibble(value: number): number {
   return nibble > 7 ? nibble - 16 : nibble;
 }
 
+function decodeSignedByte(value: number): number {
+  const byte = value & BYTE_MASK;
+  return byte > 127 ? byte - 256 : byte;
+}
+
 function assertUnsignedByte(value: number, name: string): void {
   if (!Number.isInteger(value) || value < 0 || value > 255) {
     throw new RangeError(`${name} must be an integer from 0 to 255.`);
   }
 }
 
-function assertSignedNibble(value: number, name: string): void {
-  if (!Number.isInteger(value) || value < -8 || value > 7) {
-    throw new RangeError(`${name} must be an integer from -8 to 7.`);
+function assertVelocity(value: number, name: string): void {
+  if (!Number.isFinite(value) || value < -8 || value > 127 / 16) {
+    throw new RangeError(`${name} must be from -8 to 7.9375.`);
   }
 }

@@ -1,9 +1,13 @@
 import {
+  CELL_VELOCITY_SCALE,
+  getCellFractionXRaw,
+  getCellFractionYRaw,
   getCellMaterial,
-  getCellVelocityX,
-  getCellVelocityY,
+  getCellVelocityXRaw,
+  getCellVelocityYRaw,
   type PackedCell,
-  withCellVelocityUnchecked,
+  withCellMotionUnchecked,
+  withCellVelocityRawUnchecked,
 } from '../world/Cell';
 import { type Chunk } from '../world/Chunk';
 import { CHUNK_SIZE } from '../world/constants';
@@ -15,7 +19,8 @@ import {
 } from '../world/Material';
 import { World } from '../world/World';
 
-const MAX_FALL_SPEED = 7;
+const GRAVITY_ACCELERATION = 1;
+const MAX_GRAVITY_SPEED = 3 * CELL_VELOCITY_SCALE;
 
 export class Simulation {
   private updateStamp = 0;
@@ -79,78 +84,167 @@ export class Simulation {
     cell: PackedCell,
     material: number,
   ): void {
-    const velocityX = getCellVelocityX(cell);
-    const velocityY = Math.max(getCellVelocityY(cell) - 1, -MAX_FALL_SPEED);
+    const velocityX = getCellVelocityXRaw(cell);
+    const previousVelocityY = getCellVelocityYRaw(cell);
+    const velocityY =
+      previousVelocityY > -MAX_GRAVITY_SPEED
+        ? previousVelocityY - GRAVITY_ACCELERATION
+        : previousVelocityY;
+    const totalX = getCellFractionXRaw(cell) + velocityX;
+    const totalY = getCellFractionYRaw(cell) + velocityY;
+    const movementX = Math.floor(
+      (totalX + CELL_VELOCITY_SCALE / 2) / CELL_VELOCITY_SCALE,
+    );
+    const movementY = Math.floor(
+      (totalY + CELL_VELOCITY_SCALE / 2) / CELL_VELOCITY_SCALE,
+    );
+    const fractionX = totalX - movementX * CELL_VELOCITY_SCALE;
+    const fractionY = totalY - movementY * CELL_VELOCITY_SCALE;
     const density = MATERIAL_DENSITIES[material] ?? 0;
-    let fallDistance = 0;
+    const movementSteps = Math.max(Math.abs(movementX), Math.abs(movementY));
 
-    for (let distance = 1; distance <= -velocityY; distance += 1) {
+    if (movementSteps === 0) {
+      this.world.setChunkCell(
+        chunk,
+        localX,
+        localY,
+        withCellMotionUnchecked(
+          cell,
+          velocityX,
+          velocityY,
+          fractionX,
+          fractionY,
+        ),
+        this.updateStamp,
+      );
+      return;
+    }
+
+    let targetX = 0;
+    let targetY = 0;
+    let collisionX = 0;
+    let collisionY = 0;
+    let collisionCell = 0;
+
+    for (let step = 1; step <= movementSteps; step += 1) {
+      const deltaX = Math.round((movementX * step) / movementSteps);
+      const deltaY = Math.round((movementY * step) / movementSteps);
       const target = this.world.getRelativeCell(
         chunk,
         localX,
         localY,
-        0,
-        -distance,
+        deltaX,
+        deltaY,
       );
-      if (!this.canDisplace(target, density)) break;
+      if (!this.canDisplace(target, density)) {
+        collisionX = deltaX;
+        collisionY = deltaY;
+        collisionCell = target;
+        break;
+      }
 
-      fallDistance = distance;
+      targetX = deltaX;
+      targetY = deltaY;
       if (getCellMaterial(target) !== MaterialId.Empty) break;
     }
 
-    if (fallDistance > 0) {
+    if (targetX !== 0 || targetY !== 0) {
+      const completed = targetX === movementX && targetY === movementY;
+      const movingCell =
+        completed || collisionCell === 0
+          ? withCellMotionUnchecked(
+              cell,
+              velocityX,
+              velocityY,
+              fractionX,
+              fractionY,
+            )
+          : this.transferMomentum(
+              chunk,
+              localX,
+              localY,
+              collisionX,
+              collisionY,
+              targetX,
+              targetY,
+              cell,
+              collisionCell,
+              density,
+              velocityX,
+              velocityY,
+            );
       this.world.exchangeRelative(
         chunk,
         localX,
         localY,
-        0,
-        -fallDistance,
-        withCellVelocityUnchecked(cell, 0, velocityY),
+        targetX,
+        targetY,
+        movingCell,
         this.updateStamp,
       );
       return;
     }
 
     let firstDirection: number;
-    if (velocityX === -1 || velocityX === 1) {
-      firstDirection = velocityX;
+    if (velocityX !== 0) {
+      firstDirection = velocityX < 0 ? -1 : 1;
     } else {
       const worldX = chunk.x * CHUNK_SIZE + localX;
       const worldY = chunk.y * CHUNK_SIZE + localY;
       firstDirection = ((worldX ^ worldY ^ this.tick) & 1) === 0 ? -1 : 1;
     }
 
-    if (
-      this.tryMoveDiagonal(
-        chunk,
-        localX,
-        localY,
-        cell,
-        density,
-        firstDirection,
-      )
-    ) {
-      return;
-    }
-    if (
-      this.tryMoveDiagonal(
-        chunk,
-        localX,
-        localY,
-        cell,
-        density,
-        -firstDirection,
-      )
-    ) {
-      return;
+    if (movementY < 0) {
+      if (
+        this.tryMoveDiagonal(
+          chunk,
+          localX,
+          localY,
+          cell,
+          density,
+          firstDirection,
+        )
+      ) {
+        return;
+      }
+      if (
+        this.tryMoveDiagonal(
+          chunk,
+          localX,
+          localY,
+          cell,
+          density,
+          -firstDirection,
+        )
+      ) {
+        return;
+      }
     }
 
-    if (velocityX !== 0 || getCellVelocityY(cell) !== 0) {
+    const restingCell =
+      collisionCell === 0
+        ? withCellMotionUnchecked(cell, 0, 0, 0, 0)
+        : this.transferMomentum(
+            chunk,
+            localX,
+            localY,
+            collisionX,
+            collisionY,
+            0,
+            0,
+            cell,
+            collisionCell,
+            density,
+            velocityX,
+            velocityY,
+          );
+
+    if (restingCell !== cell) {
       this.world.setChunkCell(
         chunk,
         localX,
         localY,
-        withCellVelocityUnchecked(cell, 0, 0),
+        restingCell,
         this.updateStamp,
       );
     }
@@ -179,7 +273,7 @@ export class Simulation {
       localY,
       direction,
       -1,
-      withCellVelocityUnchecked(cell, direction, -1),
+      withCellMotionUnchecked(cell, 0, 0, 0, 0),
       this.updateStamp,
     );
     return true;
@@ -193,6 +287,93 @@ export class Simulation {
       targetBehavior !== MaterialBehavior.Static &&
       (MATERIAL_DENSITIES[targetMaterial] ?? 0) < density
     );
+  }
+
+  private transferMomentum(
+    chunk: Chunk,
+    localX: number,
+    localY: number,
+    collisionX: number,
+    collisionY: number,
+    sourceDestinationX: number,
+    sourceDestinationY: number,
+    sourceCell: PackedCell,
+    targetCell: PackedCell,
+    sourceDensity: number,
+    sourceVelocityX: number,
+    sourceVelocityY: number,
+  ): PackedCell {
+    const targetMaterial = getCellMaterial(targetCell);
+    if (MATERIAL_BEHAVIORS[targetMaterial] === MaterialBehavior.Static) {
+      return withCellMotionUnchecked(sourceCell, 0, 0, 0, 0);
+    }
+
+    const targetDensity = MATERIAL_DENSITIES[targetMaterial] ?? 0;
+    if (targetDensity === 0) {
+      return withCellMotionUnchecked(sourceCell, 0, 0, 0, 0);
+    }
+
+    const targetVelocityX = getCellVelocityXRaw(targetCell);
+    const targetVelocityY = getCellVelocityYRaw(targetCell);
+    const normalX = collisionX - sourceDestinationX;
+    const normalY = collisionY - sourceDestinationY;
+    const normalLength = Math.hypot(normalX, normalY);
+    const unitNormalX = normalX / normalLength;
+    const unitNormalY = normalY / normalLength;
+    const relativeNormalVelocity =
+      (sourceVelocityX - targetVelocityX) * unitNormalX +
+      (sourceVelocityY - targetVelocityY) * unitNormalY;
+
+    if (relativeNormalVelocity <= 0) {
+      return withCellMotionUnchecked(
+        sourceCell,
+        sourceVelocityX,
+        sourceVelocityY,
+        0,
+        0,
+      );
+    }
+
+    const impulse =
+      (2 * relativeNormalVelocity * sourceDensity * targetDensity) /
+      (sourceDensity + targetDensity);
+    const nextSourceVelocityX = this.roundSigned(
+      sourceVelocityX - (impulse * unitNormalX) / sourceDensity,
+    );
+    const nextSourceVelocityY = this.roundSigned(
+      sourceVelocityY - (impulse * unitNormalY) / sourceDensity,
+    );
+    const nextTargetVelocityX = this.roundSigned(
+      targetVelocityX + (impulse * unitNormalX) / targetDensity,
+    );
+    const nextTargetVelocityY = this.roundSigned(
+      targetVelocityY + (impulse * unitNormalY) / targetDensity,
+    );
+
+    this.world.setRelativeCell(
+      chunk,
+      localX,
+      localY,
+      collisionX,
+      collisionY,
+      withCellVelocityRawUnchecked(
+        targetCell,
+        nextTargetVelocityX,
+        nextTargetVelocityY,
+      ),
+    );
+
+    return withCellMotionUnchecked(
+      sourceCell,
+      nextSourceVelocityX,
+      nextSourceVelocityY,
+      0,
+      0,
+    );
+  }
+
+  private roundSigned(value: number): number {
+    return value < 0 ? -Math.round(-value) : Math.round(value);
   }
 
   private advanceUpdateStamp(): void {
