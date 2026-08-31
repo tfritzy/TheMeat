@@ -1,12 +1,8 @@
 import { Chunk } from './Chunk';
 import {
   getCellMaterial,
-  getCellVelocityX,
-  getCellVelocityY,
   packCell,
   type PackedCell,
-  withCellMaterial,
-  withCellVelocity,
 } from './Cell';
 import { CHUNK_SIZE, type ChunkRange } from './constants';
 import { MaterialId } from './Material';
@@ -77,32 +73,7 @@ export class World {
     worldY: number,
     material: MaterialId,
   ): void {
-    this.setCell(
-      worldX,
-      worldY,
-      withCellMaterial(this.getCell(worldX, worldY), material),
-    );
-  }
-
-  public getVelocityX(worldX: number, worldY: number): number {
-    return getCellVelocityX(this.getCell(worldX, worldY));
-  }
-
-  public getVelocityY(worldX: number, worldY: number): number {
-    return getCellVelocityY(this.getCell(worldX, worldY));
-  }
-
-  public setVelocity(
-    worldX: number,
-    worldY: number,
-    velocityX: number,
-    velocityY: number,
-  ): void {
-    this.setCell(
-      worldX,
-      worldY,
-      withCellVelocity(this.getCell(worldX, worldY), velocityX, velocityY),
-    );
+    this.setCell(worldX, worldY, packCell(material));
   }
 
   public getChunk(chunkX: number, chunkY: number): Chunk | undefined {
@@ -182,52 +153,6 @@ export class World {
     targetChunk.setCellByIndex(targetIndex, movingCell);
     origin.setUpdateStamp(sourceIndex, updateStamp);
     targetChunk.setUpdateStamp(targetIndex, updateStamp);
-  }
-
-  public setChunkCell(
-    chunk: Chunk,
-    localX: number,
-    localY: number,
-    cell: PackedCell,
-    updateStamp: number,
-  ): void {
-    const index = localY * CHUNK_SIZE + localX;
-    chunk.setUpdateStamp(index, updateStamp);
-    chunk.setCellByIndex(index, cell);
-  }
-
-  public setRelativeCell(
-    origin: Chunk,
-    localX: number,
-    localY: number,
-    deltaX: number,
-    deltaY: number,
-    cell: PackedCell,
-  ): void {
-    let targetX = localX + deltaX;
-    let targetY = localY + deltaY;
-    let targetChunk = origin;
-
-    if (
-      targetX < 0 ||
-      targetX >= CHUNK_SIZE ||
-      targetY < 0 ||
-      targetY >= CHUNK_SIZE
-    ) {
-      const chunkOffsetX = Math.floor(targetX / CHUNK_SIZE);
-      const chunkOffsetY = Math.floor(targetY / CHUNK_SIZE);
-      targetX -= chunkOffsetX * CHUNK_SIZE;
-      targetY -= chunkOffsetY * CHUNK_SIZE;
-      const adjacentChunk = this.getChunk(
-        origin.x + chunkOffsetX,
-        origin.y + chunkOffsetY,
-      );
-      if (!adjacentChunk) return;
-      targetChunk = adjacentChunk;
-    }
-
-    const index = targetY * CHUNK_SIZE + targetX;
-    targetChunk.setCellByIndex(index, cell);
   }
 
   public clearUpdateStamps(): void {

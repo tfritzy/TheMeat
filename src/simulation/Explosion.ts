@@ -1,52 +1,46 @@
 import {
-  CELL_VELOCITY_SCALE,
+  EMPTY_CELL,
   getCellMaterial,
-  withCellMotionUnchecked,
 } from '../world/Cell';
-import { CHUNK_SIZE } from '../world/constants';
-import { MaterialId } from '../world/Material';
+import { MATERIAL_BEHAVIORS, MaterialBehavior } from '../world/Material';
 import { World } from '../world/World';
-
-const MAX_IMPULSE = 7;
 
 export function explode(
   world: World,
   centerX: number,
   centerY: number,
   radius: number,
-  strength: number,
 ): number {
-  const impulse =
-    Math.min(Math.max(strength, 0), MAX_IMPULSE) * CELL_VELOCITY_SCALE;
-  const radiusSquared = Math.max(radius, 0) ** 2;
-  let affectedCells = 0;
+  if (radius < 0) return 0;
 
-  for (const chunk of world.loadedChunks) {
-    for (let localY = 0; localY < CHUNK_SIZE; localY += 1) {
-      for (let localX = 0; localX < CHUNK_SIZE; localX += 1) {
-        const index = localY * CHUNK_SIZE + localX;
-        const cell = chunk.getCellByIndex(index);
-        if (getCellMaterial(cell) !== MaterialId.Sand) continue;
+  const radiusSquared = radius * radius;
+  const minimumX = Math.ceil(centerX - radius);
+  const maximumX = Math.floor(centerX + radius);
+  const minimumY = Math.ceil(centerY - radius);
+  const maximumY = Math.floor(centerY + radius);
+  let destroyedCells = 0;
 
-        const deltaX = chunk.x * CHUNK_SIZE + localX - centerX;
-        const deltaY = chunk.y * CHUNK_SIZE + localY - centerY;
-        const distanceSquared = deltaX * deltaX + deltaY * deltaY;
-        if (distanceSquared > radiusSquared) continue;
+  for (let worldY = minimumY; worldY <= maximumY; worldY += 1) {
+    const deltaY = worldY - centerY;
 
-        const distance = Math.sqrt(distanceSquared);
-        const velocityX =
-          distance === 0 ? 0 : Math.round((deltaX / distance) * impulse);
-        const velocityY =
-          distance === 0 ? impulse : Math.round((deltaY / distance) * impulse);
+    for (let worldX = minimumX; worldX <= maximumX; worldX += 1) {
+      const deltaX = worldX - centerX;
+      if (deltaX * deltaX + deltaY * deltaY > radiusSquared) continue;
 
-        chunk.setCellByIndex(
-          index,
-          withCellMotionUnchecked(cell, velocityX, velocityY, 0, 0),
-        );
-        affectedCells += 1;
+      const behavior = MATERIAL_BEHAVIORS[
+        getCellMaterial(world.getCell(worldX, worldY))
+      ];
+      if (
+        behavior !== MaterialBehavior.Powder &&
+        behavior !== MaterialBehavior.Static
+      ) {
+        continue;
       }
+
+      world.setCell(worldX, worldY, EMPTY_CELL);
+      destroyedCells += 1;
     }
   }
 
-  return affectedCells;
+  return destroyedCells;
 }

@@ -1,13 +1,15 @@
 export enum MaterialId {
   Empty = 0,
   Sand = 1,
-  Stone = 2,
+  Water = 2,
+  Stone = 3,
 }
 
 export enum MaterialBehavior {
   Empty = 0,
   Powder = 1,
-  Static = 2,
+  Liquid = 2,
+  Static = 3,
 }
 
 export interface MaterialDefinition {
@@ -34,6 +36,13 @@ export const MATERIAL_DEFINITIONS: Readonly<
     density: 160,
     color: 0xd6b25c,
     opacity: 1,
+  },
+  [MaterialId.Water]: {
+    name: 'water',
+    behavior: MaterialBehavior.Liquid,
+    density: 80,
+    color: 0x3f8fd2,
+    opacity: 0.82,
   },
   [MaterialId.Stone]: {
     name: 'stone',

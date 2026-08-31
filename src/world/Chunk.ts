@@ -2,16 +2,13 @@ import { CELLS_PER_CHUNK, CHUNK_SIZE } from './constants';
 import {
   EMPTY_CELL,
   getCellMaterial,
-  getCellVelocityX,
-  getCellVelocityY,
+  packCell,
   type PackedCell,
-  withCellMaterial,
-  withCellVelocity,
 } from './Cell';
 import { MaterialId } from './Material';
 
 export class Chunk {
-  private readonly cells = new Uint32Array(CELLS_PER_CHUNK);
+  private readonly cells = new Uint8Array(CELLS_PER_CHUNK);
   private readonly updateStamps = new Uint32Array(CELLS_PER_CHUNK);
 
   public revision = 0;
@@ -52,32 +49,7 @@ export class Chunk {
     localY: number,
     material: MaterialId,
   ): void {
-    this.setCell(
-      localX,
-      localY,
-      withCellMaterial(this.getCell(localX, localY), material),
-    );
-  }
-
-  public getVelocityX(localX: number, localY: number): number {
-    return getCellVelocityX(this.getCell(localX, localY));
-  }
-
-  public getVelocityY(localX: number, localY: number): number {
-    return getCellVelocityY(this.getCell(localX, localY));
-  }
-
-  public setVelocity(
-    localX: number,
-    localY: number,
-    velocityX: number,
-    velocityY: number,
-  ): void {
-    this.setCell(
-      localX,
-      localY,
-      withCellVelocity(this.getCell(localX, localY), velocityX, velocityY),
-    );
+    this.setCell(localX, localY, packCell(material));
   }
 
   public getUpdateStamp(index: number): number {

@@ -9,12 +9,16 @@ export interface ChunkRange {
   readonly maximumY: number;
 }
 
+export function getViewportWidthInCells(width: number, height: number): number {
+  const aspectRatio = width > 0 && height > 0 ? width / height : 1;
+  return VIEW_HEIGHT_IN_CELLS * aspectRatio;
+}
+
 export function getViewportChunkRange(
   width: number,
   height: number,
 ): ChunkRange {
-  const aspectRatio = width > 0 && height > 0 ? width / height : 1;
-  const visibleWidth = VIEW_HEIGHT_IN_CELLS * aspectRatio;
+  const visibleWidth = getViewportWidthInCells(width, height);
   const minimumCellX = Math.floor(-visibleWidth / 2);
   const maximumCellX = Math.ceil(visibleWidth / 2) - 1;
   const minimumCellY = -VIEW_HEIGHT_IN_CELLS / 2;

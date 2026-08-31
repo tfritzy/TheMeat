@@ -3,7 +3,10 @@ import { explode } from '../simulation/Explosion';
 import { Simulation } from '../simulation/Simulation';
 import { packCell } from '../world/Cell';
 import { createInitialWorld } from '../world/createInitialWorld';
-import { getViewportChunkRange } from '../world/constants';
+import {
+  getViewportChunkRange,
+  getViewportWidthInCells,
+} from '../world/constants';
 import { MaterialId } from '../world/Material';
 import { World } from '../world/World';
 
@@ -15,20 +18,36 @@ const EXPLOSION_INTERVAL_TICKS = 5 * 60;
 const EXPLOSION_X = 0;
 const EXPLOSION_Y = -49;
 const EXPLOSION_RADIUS = 20;
-const EXPLOSION_STRENGTH = 7;
+const FAUCET_Y = 70;
+const WATER_SPAWN_INTERVAL_TICKS = 1;
+const WATER_STREAM_WIDTH = 2;
 
 export class Game {
   private readonly world: World;
   private readonly simulation: Simulation;
   private readonly renderer: WorldRenderer;
+  private readonly faucetX: number;
   private animationFrame: number | null = null;
   private previousTime: number | null = null;
   private accumulatedTime = 0;
   private simulationTick = 0;
 
   public constructor(container: HTMLElement) {
+    const chunkRange = getViewportChunkRange(
+      container.clientWidth,
+      container.clientHeight,
+    );
+    this.faucetX =
+      Math.floor(
+        getViewportWidthInCells(
+          container.clientWidth,
+          container.clientHeight,
+        ) / 2,
+      ) - 12;
     this.world = createInitialWorld(
-      getViewportChunkRange(container.clientWidth, container.clientHeight),
+      chunkRange,
+      this.faucetX,
+      FAUCET_Y,
     );
     this.simulation = new Simulation(this.world);
     this.renderer = new WorldRenderer(container, this.world);
@@ -54,10 +73,10 @@ export class Game {
             EXPLOSION_X,
             EXPLOSION_Y,
             EXPLOSION_RADIUS,
-            EXPLOSION_STRENGTH,
           );
         }
         this.emitDemoSand();
+        this.emitWater();
         this.simulation.step();
         this.simulationTick += 1;
         this.accumulatedTime -= FIXED_STEP_SECONDS;
@@ -89,5 +108,16 @@ export class Game {
 
     if (this.world.getMaterial(streamX, STREAM_Y) !== MaterialId.Empty) return;
     this.world.setCell(streamX, STREAM_Y, packCell(MaterialId.Sand));
+  }
+
+  private emitWater(): void {
+    if (this.simulationTick % WATER_SPAWN_INTERVAL_TICKS !== 0) return;
+
+    const streamX =
+      this.faucetX + (this.simulationTick % WATER_STREAM_WIDTH);
+    const streamY = FAUCET_Y - 1;
+    if (this.world.getMaterial(streamX, streamY) !== MaterialId.Empty) return;
+
+    this.world.setCell(streamX, streamY, packCell(MaterialId.Water));
   }
 }
