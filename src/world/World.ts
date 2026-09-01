@@ -1,20 +1,21 @@
-import { Chunk } from './Chunk';
-import {
-  getCellMaterial,
-  packCell,
-  type PackedCell,
-} from './Cell';
-import { CHUNK_SIZE, type ChunkRange } from './constants';
-import { MaterialId } from './Material';
+import { Chunk } from "./Chunk";
+import { getCellMaterial, packCell, type PackedCell } from "./Cell";
+import { CHUNK_SIZE, ChunkRange } from "./constants";
+import { MaterialId } from "./Material";
 
 const BOUNDARY_CELL = packCell(MaterialId.Stone);
 
 export class World {
+  public width: number;
+  public height: number;
+
   private readonly chunks = new Set<Chunk>();
   private readonly chunkRows = new Map<number, Map<number, Chunk>>();
 
   public constructor(chunkRange: ChunkRange) {
     this.validateChunkRange(chunkRange);
+    this.width = (chunkRange.maximumX - chunkRange.minimumX) * CHUNK_SIZE;
+    this.height = (chunkRange.maximumY - chunkRange.minimumY) * CHUNK_SIZE;
 
     for (
       let chunkY = chunkRange.minimumY;
@@ -168,7 +169,9 @@ export class World {
       chunkRange.minimumX > chunkRange.maximumX ||
       chunkRange.minimumY > chunkRange.maximumY
     ) {
-      throw new RangeError('Chunk range must contain valid inclusive integers.');
+      throw new RangeError(
+        "Chunk range must contain valid inclusive integers.",
+      );
     }
   }
 }

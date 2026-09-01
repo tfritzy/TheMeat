@@ -1,56 +1,46 @@
-import { WorldRenderer } from '../rendering/WorldRenderer';
-import { explode } from '../simulation/Explosion';
-import { Simulation } from '../simulation/Simulation';
-import { packCell } from '../world/Cell';
-import { createInitialWorld } from '../world/createInitialWorld';
-import {
-  getViewportChunkRange,
-  getViewportWidthInCells,
-} from '../world/constants';
-import { MaterialId } from '../world/Material';
-import { World } from '../world/World';
-
+import { WorldRenderer } from "../rendering/WorldRenderer";
+import { Simulation } from "../simulation/Simulation";
+import { createInitialWorld } from "../world/createInitialWorld";
+import { World } from "../world/World";
+import { packCell } from "../world/Cell";
+import { MaterialId } from "../world/Material";
 const FIXED_STEP_SECONDS = 1 / 60;
-const STREAM_Y = 86;
-const STREAM_HALF_WIDTH = 1;
-const SPAWN_INTERVAL_TICKS = 2;
-const EXPLOSION_INTERVAL_TICKS = 5 * 60;
-const EXPLOSION_X = 0;
-const EXPLOSION_Y = -49;
-const EXPLOSION_RADIUS = 20;
-const FAUCET_Y = 70;
-const WATER_SPAWN_INTERVAL_TICKS = 1;
-const WATER_STREAM_WIDTH = 2;
 
 export class Game {
   private readonly world: World;
   private readonly simulation: Simulation;
   private readonly renderer: WorldRenderer;
-  private readonly faucetX: number;
+  private readonly container: HTMLElement;
   private animationFrame: number | null = null;
   private previousTime: number | null = null;
   private accumulatedTime = 0;
   private simulationTick = 0;
+  private material: MaterialId = MaterialId.Sand;
 
   public constructor(container: HTMLElement) {
-    const chunkRange = getViewportChunkRange(
-      container.clientWidth,
-      container.clientHeight,
-    );
-    this.faucetX =
-      Math.floor(
-        getViewportWidthInCells(
-          container.clientWidth,
-          container.clientHeight,
-        ) / 2,
-      ) - 12;
-    this.world = createInitialWorld(
-      chunkRange,
-      this.faucetX,
-      FAUCET_Y,
-    );
+    const chunkRange = {
+      maximumX: 20,
+      maximumY: 10,
+      minimumX: 0,
+      minimumY: 0,
+    };
+    this.world = createInitialWorld(chunkRange);
     this.simulation = new Simulation(this.world);
     this.renderer = new WorldRenderer(container, this.world);
+    this.container = container;
+
+    container.onmousemove = this.handleMove;
+    document.addEventListener("keydown", (ev: KeyboardEvent) => {
+      if (ev.key === "1") {
+        this.material = MaterialId.Sand;
+      } else if (ev.key === "2") {
+        this.material = MaterialId.Water;
+      } else if (ev.key === "3") {
+        this.material = MaterialId.Stone;
+      } else if (ev.key === "4") {
+        this.material = MaterialId.Empty;
+      }
+    });
   }
 
   public start(): void {
@@ -64,21 +54,9 @@ export class Game {
       this.accumulatedTime += elapsedSeconds;
 
       while (this.accumulatedTime >= FIXED_STEP_SECONDS) {
-        if (
-          this.simulationTick > 0 &&
-          this.simulationTick % EXPLOSION_INTERVAL_TICKS === 0
-        ) {
-          explode(
-            this.world,
-            EXPLOSION_X,
-            EXPLOSION_Y,
-            EXPLOSION_RADIUS,
-          );
-        }
-        this.emitDemoSand();
-        this.emitWater();
         this.simulation.step();
         this.simulationTick += 1;
+
         this.accumulatedTime -= FIXED_STEP_SECONDS;
       }
 
@@ -98,26 +76,13 @@ export class Game {
     this.accumulatedTime = 0;
   }
 
-  private emitDemoSand(): void {
-    if (this.simulationTick % SPAWN_INTERVAL_TICKS !== 0) return;
-
-    const streamWidth = STREAM_HALF_WIDTH * 2 + 1;
-    const streamX =
-      (Math.floor(this.simulationTick / SPAWN_INTERVAL_TICKS) % streamWidth) -
-      STREAM_HALF_WIDTH;
-
-    if (this.world.getMaterial(streamX, STREAM_Y) !== MaterialId.Empty) return;
-    this.world.setCell(streamX, STREAM_Y, packCell(MaterialId.Sand));
-  }
-
-  private emitWater(): void {
-    if (this.simulationTick % WATER_SPAWN_INTERVAL_TICKS !== 0) return;
-
-    const streamX =
-      this.faucetX + (this.simulationTick % WATER_STREAM_WIDTH);
-    const streamY = FAUCET_Y - 1;
-    if (this.world.getMaterial(streamX, streamY) !== MaterialId.Empty) return;
-
-    this.world.setCell(streamX, streamY, packCell(MaterialId.Water));
-  }
+  handleMove = (ev: MouseEvent) => {
+    const x = this.renderer.toWorldX(ev.x);
+    const y = this.renderer.toWorldY(ev.y);
+    for (let xi = x; xi < x + 5; xi++) {
+      for (let yi = y; yi < y + 5; yi++) {
+        this.world.setCell(xi, yi, packCell(this.material));
+      }
+    }
+  };
 }

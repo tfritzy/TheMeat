@@ -1,12 +1,12 @@
-import { getCellMaterial, type PackedCell } from '../world/Cell';
-import { type Chunk } from '../world/Chunk';
-import { CHUNK_SIZE } from '../world/constants';
+import { getCellMaterial, type PackedCell } from "../world/Cell";
+import { type Chunk } from "../world/Chunk";
+import { CHUNK_SIZE } from "../world/constants";
 import {
   MATERIAL_BEHAVIORS,
   MATERIAL_DENSITIES,
   MaterialBehavior,
-} from '../world/Material';
-import { World } from '../world/World';
+} from "../world/Material";
+import { World } from "../world/World";
 
 export class Simulation {
   private updateStamp = 0;
@@ -71,20 +71,11 @@ export class Simulation {
     cell: PackedCell,
     density: number,
   ): void {
-    if (
-      this.tryMoveRelative(chunk, localX, localY, cell, density, 0, -1)
-    ) {
+    if (this.tryMoveRelative(chunk, localX, localY, cell, density, 0, -1)) {
       return;
     }
 
-    this.tryMoveEitherDirection(
-      chunk,
-      localX,
-      localY,
-      cell,
-      density,
-      -1,
-    );
+    this.tryMoveEitherDirection(chunk, localX, localY, cell, density, -1);
   }
 
   private updateLiquid(
@@ -96,26 +87,12 @@ export class Simulation {
   ): void {
     if (
       this.tryMoveRelative(chunk, localX, localY, cell, density, 0, -1) ||
-      this.tryMoveEitherDirection(
-        chunk,
-        localX,
-        localY,
-        cell,
-        density,
-        -1,
-      )
+      this.tryMoveEitherDirection(chunk, localX, localY, cell, density, -1)
     ) {
       return;
     }
 
-    this.tryMoveEitherDirection(
-      chunk,
-      localX,
-      localY,
-      cell,
-      density,
-      0,
-    );
+    this.tryMoveEitherDirection(chunk, localX, localY, cell, density, 0);
   }
 
   private tryMoveEitherDirection(

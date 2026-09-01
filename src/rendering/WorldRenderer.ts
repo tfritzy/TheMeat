@@ -1,14 +1,9 @@
-import {
-  Color,
-  OrthographicCamera,
-  Scene,
-  WebGLRenderer,
-} from 'three';
+import { Color, OrthographicCamera, Scene, WebGLRenderer } from "three";
 
-import { Chunk } from '../world/Chunk';
-import { VIEW_HEIGHT_IN_CELLS } from '../world/constants';
-import { World } from '../world/World';
-import { ChunkView } from './ChunkView';
+import { Chunk } from "../world/Chunk";
+import { VIEW_HEIGHT_IN_CELLS } from "../world/constants";
+import { World } from "../world/World";
+import { ChunkView } from "./ChunkView";
 
 export class WorldRenderer {
   private readonly scene = new Scene();
@@ -33,6 +28,21 @@ export class WorldRenderer {
     });
     this.resizeObserver.observe(container);
     this.resize(container.clientWidth, container.clientHeight);
+
+    document.onkeydown = (ev: KeyboardEvent) => {
+      if (ev.key == "w") {
+        this.camera.position.y += 10;
+      }
+      if (ev.key == "d") {
+        this.camera.position.x += 10;
+      }
+      if (ev.key == "s") {
+        this.camera.position.y -= 10;
+      }
+      if (ev.key == "a") {
+        this.camera.position.x -= 10;
+      }
+    };
   }
 
   public render(): void {
@@ -55,6 +65,26 @@ export class WorldRenderer {
     this.chunkViews.clear();
     this.renderer.dispose();
     this.renderer.domElement.remove();
+  }
+
+  public toWorldX(screenX: number): number {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+
+    const normalizedX = ((screenX - rect.left) / rect.width) * 2 - 1;
+    const halfWorldWidth = (this.camera.right - this.camera.left) / 2;
+
+    return Math.floor(this.camera.position.x + normalizedX * halfWorldWidth);
+  }
+
+  public toWorldY(screenY: number): number {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const t = (screenY - rect.top) / rect.height;
+
+    return Math.floor(
+      this.camera.position.y +
+        this.camera.top -
+        t * (this.camera.top - this.camera.bottom),
+    );
   }
 
   private syncChunkViews(): void {
