@@ -2,13 +2,13 @@ import { CELLS_PER_CHUNK, CHUNK_SIZE } from './constants';
 import {
   EMPTY_CELL,
   getCellMaterial,
-  packCell,
+  setCellMaterial,
   type PackedCell,
 } from './Cell';
 import { MaterialId } from './Material';
 
 export class Chunk {
-  private readonly cells = new Uint8Array(CELLS_PER_CHUNK);
+  private readonly cells = new Uint32Array(CELLS_PER_CHUNK);
   private readonly updateStamps = new Uint32Array(CELLS_PER_CHUNK);
 
   public revision = 0;
@@ -49,7 +49,11 @@ export class Chunk {
     localY: number,
     material: MaterialId,
   ): void {
-    this.setCell(localX, localY, packCell(material));
+    const index = this.indexOf(localX, localY);
+    this.setCellByIndex(
+      index,
+      setCellMaterial(this.getCellByIndex(index), material),
+    );
   }
 
   public getUpdateStamp(index: number): number {

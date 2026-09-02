@@ -1,5 +1,10 @@
 import { Chunk } from "./Chunk";
-import { getCellMaterial, packCell, type PackedCell } from "./Cell";
+import {
+  getCellMaterial,
+  packCell,
+  setCellMaterial,
+  type PackedCell,
+} from "./Cell";
 import { CHUNK_SIZE, ChunkRange } from "./constants";
 import { MaterialId } from "./Material";
 
@@ -74,7 +79,11 @@ export class World {
     worldY: number,
     material: MaterialId,
   ): void {
-    this.setCell(worldX, worldY, packCell(material));
+    this.setCell(
+      worldX,
+      worldY,
+      setCellMaterial(this.getCell(worldX, worldY), material),
+    );
   }
 
   public getChunk(chunkX: number, chunkY: number): Chunk | undefined {
