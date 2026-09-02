@@ -2,7 +2,9 @@ import { Color, OrthographicCamera, Scene, WebGLRenderer } from "three";
 
 import { Chunk } from "../world/Chunk";
 import { VIEW_HEIGHT_IN_CELLS } from "../world/constants";
+import { EntityId } from "../world/Entity";
 import { World } from "../world/World";
+import { CharacterView } from "./CharacterView";
 import { ChunkView } from "./ChunkView";
 
 export class WorldRenderer {
@@ -10,11 +12,13 @@ export class WorldRenderer {
   private readonly camera = new OrthographicCamera();
   private readonly renderer = new WebGLRenderer({ antialias: false });
   private readonly chunkViews = new Map<Chunk, ChunkView>();
+  private readonly characterViews = new Map<EntityId, CharacterView>();
   private readonly resizeObserver: ResizeObserver;
 
   public constructor(
     container: HTMLElement,
     private readonly world: World,
+    private readonly cameraTargetId: EntityId,
   ) {
     this.scene.background = new Color(0x111318);
     this.camera.position.set(0, 0, 10);
@@ -28,28 +32,24 @@ export class WorldRenderer {
     });
     this.resizeObserver.observe(container);
     this.resize(container.clientWidth, container.clientHeight);
-
-    document.onkeydown = (ev: KeyboardEvent) => {
-      if (ev.key == "w") {
-        this.camera.position.y += 10;
-      }
-      if (ev.key == "d") {
-        this.camera.position.x += 10;
-      }
-      if (ev.key == "s") {
-        this.camera.position.y -= 10;
-      }
-      if (ev.key == "a") {
-        this.camera.position.x -= 10;
-      }
-    };
   }
 
   public render(): void {
     this.syncChunkViews();
+    this.syncCharacterViews();
 
     for (const view of this.chunkViews.values()) {
       view.update();
+    }
+
+    for (const view of this.characterViews.values()) {
+      view.update();
+    }
+
+    const cameraTarget = this.world.characters.get(this.cameraTargetId);
+    if (cameraTarget) {
+      this.camera.position.x = cameraTarget.rigidBody.gridX;
+      this.camera.position.y = cameraTarget.rigidBody.gridY;
     }
 
     this.renderer.render(this.scene, this.camera);
@@ -62,7 +62,12 @@ export class WorldRenderer {
       view.dispose();
     }
 
+    for (const view of this.characterViews.values()) {
+      view.dispose();
+    }
+
     this.chunkViews.clear();
+    this.characterViews.clear();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -94,6 +99,24 @@ export class WorldRenderer {
       const view = new ChunkView(chunk);
       this.chunkViews.set(chunk, view);
       this.scene.add(view.mesh);
+    }
+  }
+
+  private syncCharacterViews(): void {
+    for (const [id, character] of this.world.characters) {
+      if (this.characterViews.has(id)) continue;
+
+      const view = new CharacterView(character);
+      this.characterViews.set(id, view);
+      this.scene.add(view.mesh);
+    }
+
+    for (const [id, view] of this.characterViews) {
+      if (this.world.characters.has(id)) continue;
+
+      this.scene.remove(view.mesh);
+      view.dispose();
+      this.characterViews.delete(id);
     }
   }
 

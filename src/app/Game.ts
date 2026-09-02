@@ -3,13 +3,17 @@ import { Simulation } from "../simulation/Simulation";
 import { createInitialWorld } from "../world/createInitialWorld";
 import { World } from "../world/World";
 import { packCell } from "../world/Cell";
+import { EntityId } from "../world/Entity";
 import { MaterialId } from "../world/Material";
+import { Player } from "../world/Player";
 const FIXED_STEP_SECONDS = 1 / 60;
 
 export class Game {
   private readonly world: World;
   private readonly simulation: Simulation;
   private readonly renderer: WorldRenderer;
+  private readonly player: Player;
+  private readonly playerId: EntityId;
   private readonly container: HTMLElement;
   private animationFrame: number | null = null;
   private previousTime: number | null = null;
@@ -25,11 +29,13 @@ export class Game {
       minimumY: 0,
     };
     this.world = createInitialWorld(chunkRange);
+    this.player = new Player();
+    this.playerId = this.world.addCharacter(this.player, 10, 100);
     this.simulation = new Simulation(this.world);
-    this.renderer = new WorldRenderer(container, this.world);
+    this.renderer = new WorldRenderer(container, this.world, this.playerId);
     this.container = container;
 
-    container.onmousemove = this.handleMove;
+    document.addEventListener("mousemove", this.handleMove);
     document.addEventListener("keydown", (ev: KeyboardEvent) => {
       if (ev.key === "1") {
         this.material = MaterialId.Sand;
@@ -54,7 +60,8 @@ export class Game {
       this.accumulatedTime += elapsedSeconds;
 
       while (this.accumulatedTime >= FIXED_STEP_SECONDS) {
-        this.simulation.step();
+        this.player.controller.update(FIXED_STEP_SECONDS);
+        this.simulation.step(FIXED_STEP_SECONDS);
         this.simulationTick += 1;
 
         this.accumulatedTime -= FIXED_STEP_SECONDS;
@@ -77,6 +84,8 @@ export class Game {
   }
 
   handleMove = (ev: MouseEvent) => {
+    if (!ev.buttons) return;
+
     const x = this.renderer.toWorldX(ev.x);
     const y = this.renderer.toWorldY(ev.y);
     for (let xi = x; xi < x + 5; xi++) {

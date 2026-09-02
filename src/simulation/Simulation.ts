@@ -7,8 +7,10 @@ import {
   MaterialBehavior,
 } from "../world/Material";
 import { World } from "../world/World";
+import { CharacterPhysics } from "./CharacterPhysics";
 
 export class Simulation {
+  private readonly characterPhysics: CharacterPhysics;
   private updateStamp = 0;
   private tick = 0;
 
@@ -16,9 +18,12 @@ export class Simulation {
   public visitedCellCount = 0;
   public updatedCellCount = 0;
 
-  public constructor(private readonly world: World) {}
+  public constructor(private readonly world: World) {
+    this.characterPhysics = new CharacterPhysics(world);
+  }
 
-  public step(): void {
+  public step(deltaSeconds: number): void {
+    this.characterPhysics.update(deltaSeconds);
     this.advanceUpdateStamp();
     this.processedChunkCount = 0;
     this.visitedCellCount = 0;

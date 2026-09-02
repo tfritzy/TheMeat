@@ -3,11 +3,7 @@ export enum MaterialId {
   Sand = 1,
   Water = 2,
   Stone = 3,
-  Skin = 4,
-  Cloth = 5,
-  Hair = 6,
-  Eye = 7,
-  Shoe = 8,
+  Flesh = 4,
 }
 
 export enum MaterialBehavior {
@@ -56,39 +52,11 @@ export const MATERIAL_DEFINITIONS: Readonly<
     color: 0x5b6069,
     opacity: 1,
   },
-  [MaterialId.Skin]: {
-    name: 'skin',
+  [MaterialId.Flesh]: {
+    name: 'flesh',
     behavior: MaterialBehavior.Static,
     density: 255,
     color: 0xe6a06f,
-    opacity: 1,
-  },
-  [MaterialId.Cloth]: {
-    name: 'cloth',
-    behavior: MaterialBehavior.Static,
-    density: 255,
-    color: 0x3478c5,
-    opacity: 1,
-  },
-  [MaterialId.Hair]: {
-    name: 'hair',
-    behavior: MaterialBehavior.Static,
-    density: 255,
-    color: 0x503225,
-    opacity: 1,
-  },
-  [MaterialId.Eye]: {
-    name: 'eye',
-    behavior: MaterialBehavior.Static,
-    density: 255,
-    color: 0x17191f,
-    opacity: 1,
-  },
-  [MaterialId.Shoe]: {
-    name: 'shoe',
-    behavior: MaterialBehavior.Static,
-    density: 255,
-    color: 0x29242a,
     opacity: 1,
   },
 };

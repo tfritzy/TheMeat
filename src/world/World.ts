@@ -1,4 +1,5 @@
 import { Chunk } from "./Chunk";
+import { Character } from "./Character";
 import {
   getCellMaterial,
   packCell,
@@ -6,6 +7,7 @@ import {
   type PackedCell,
 } from "./Cell";
 import { CHUNK_SIZE, ChunkRange } from "./constants";
+import { EntityId } from "./Entity";
 import { MaterialId } from "./Material";
 
 const BOUNDARY_CELL = packCell(MaterialId.Stone);
@@ -16,6 +18,7 @@ export class World {
 
   private readonly chunks = new Set<Chunk>();
   private readonly chunkRows = new Map<number, Map<number, Chunk>>();
+  private readonly characterMap = new Map<EntityId, Character>();
 
   public constructor(chunkRange: ChunkRange) {
     this.validateChunkRange(chunkRange);
@@ -44,6 +47,20 @@ export class World {
 
   public get loadedChunks(): ReadonlySet<Chunk> {
     return this.chunks;
+  }
+
+  public get characters(): ReadonlyMap<EntityId, Character> {
+    return this.characterMap;
+  }
+
+  public addCharacter(character: Character, x: number, y: number): EntityId {
+    character.rigidBody.setPosition(x, y);
+    this.characterMap.set(character.id, character);
+    return character.id;
+  }
+
+  public removeCharacter(id: EntityId): boolean {
+    return this.characterMap.delete(id);
   }
 
   public getCell(worldX: number, worldY: number): PackedCell {
