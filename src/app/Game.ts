@@ -28,9 +28,14 @@ export class Game {
       minimumX: 0,
       minimumY: 0,
     };
-    this.world = createInitialWorld(chunkRange);
+    const initialWorld = createInitialWorld(chunkRange, getGenerationSeed());
+    this.world = initialWorld.world;
     this.player = new Player();
-    this.playerId = this.world.addCharacter(this.player, 10, 100);
+    this.playerId = this.world.addCharacter(
+      this.player,
+      initialWorld.playerSpawn.x,
+      initialWorld.playerSpawn.y,
+    );
     this.simulation = new Simulation(this.world);
     this.renderer = new WorldRenderer(container, this.world, this.playerId);
     this.container = container;
@@ -94,4 +99,13 @@ export class Game {
       }
     }
   };
+}
+
+function getGenerationSeed(): number {
+  const value = new URLSearchParams(window.location.search).get("seed");
+  if (value !== null) {
+    const seed = Number(value);
+    if (Number.isSafeInteger(seed)) return seed;
+  }
+  return Date.now();
 }
